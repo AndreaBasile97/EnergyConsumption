@@ -8,7 +8,6 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from src.Utils import get_args,model_evaluation
 
-
 #python.exe main.py --pathCSV energy.csv --config MULTI-STEP --target energy_consumption --histFeatures "energy_consumption" --key customer --dateCol date --windowSize 12 --numTargets 12 --spatial None --temporal None
 #python.exe main.py --pathCSV "energy_consumption.csv" --config MULTI-STEP --target grid --histFeatures "grid,solar" --key house --dateCol date --windowSize 16 --numTargets 16
 # Per SS-DTP in histFeatures avremo "energy_consumption,year,month"
