@@ -6,3 +6,4 @@
 1.173,0.31,0.69,2019-05-20T00:00:00.000000,2019-05-21T20:00:00.000000,MULTI-STEP,"RandomForestRegressor(n_jobs=-1, random_state=1)"
 1.169,0.308,0.692,2019-05-20T00:00:00.000000,2019-05-21T20:00:00.000000,MULTI-STEP_PCNM,"RandomForestRegressor(n_jobs=-1, random_state=1)"
 1.165,0.306,0.694,2019-05-20T00:00:00.000000,2019-05-21T20:00:00.000000,MULTI-STEP,"RandomForestRegressor(n_jobs=-1, random_state=1)"
+1.173,0.31,0.69,2019-05-20T00:00:00.000000,2019-05-21T20:00:00.000000,MULTI-STEP,"RandomForestRegressor(n_jobs=-1, random_state=1)"
