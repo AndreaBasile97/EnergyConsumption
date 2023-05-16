@@ -46,7 +46,7 @@ $$ I_{x,c_a} = x'_{c_a} \sum (N'[c_a, c_i]* x'_{c_i}) $$
 
 Note: $maxDist$ is an hyperparameter.
 
-- **PCNM** ⭐: This approach is slightly different from LISA. Basically we need $D$ that is the matrix containing the Euclidean-Distance between consumers. Then compute a truncated distance matrix $D^*$ and perform the **PCoA** (Principal Coordinate Analysis) on $D^*$. Computing the PCoA
+- **PCNM** ⭐: This approach is slightly different from LISA. Basically we need $D$ that is the matrix containing the Harvesine-Distance between consumers. Then compute a truncated distance matrix $D^*$ and perform the **PCoA** (Principal Coordinate Analysis) on $D^*$. Computing the PCoA
 
 
 $$ D^* = \begin{cases} 
@@ -60,6 +60,9 @@ On the matrix $D^*$ compute the PCoA that will output a matrix containing on the
 ⭐: *best results on the project*
 
 ---
+
+<br>
+<br>
 
 # 📂 The Dataset 
 
@@ -129,3 +132,29 @@ The dataset used in this project is different from the original since this is ba
 </table>
 
 We have 96 slices of times/day for each costumer. The data are extract for an interval of 184 days so we have a total of 17.664 values of energy consumption for each consumer.
+
+<br>
+<br>
+
+# 🔧 Configurator
+
+The configurator is a tool to transform the dataset extracted by the .csv file in order to set it for the training phase. The Configurator is a class containing these attributes:
+
+- *configuration*: Single-Step, Multi-Step.
+- *windows_size*: How much 'time-steps' back we want to keep.
+- *n_targets*: used in Multi-step to specify how many future time steps we want predict.
+- *target*: the name of the variable considered as target to predict.
+- *key*: the key that distinguish a customer from another one.
+- *histFeatures*: what historical features add to dataset. The features specified here are added using 'lag' (past values) based on window-size.
+- *dateCol*: specify the name of the date column.
+- *spatial_method*: LISA, PCNM
+
+Then there are 7 methods:
+
+- *spatial*: apply spatial transformation in order to compute new features like the indicator if using LISA or eigenvectors associated to high postive eigen-values if using PCNM.
+- *add_feature*: method useful to apply historical features in the dataset specifying also the type of features 'lag' (past) or 'lead' (future).
+- *Local_Moran*: compute the Local Moran statistics that measures how much, a value is spatially correlated to neighbors.
+- *transform*: manipulate the dataset in order to make it fisible to our task.
+- *prediction*: generate prediction for target features based on the setting (SS, MT) if MT then, the MT_learning_prediction is used.
+- *MT_learning_prediction*: Multi-target learning prediction. Used when the model is required to predict multiple outputs variables. This method split the dataset in train, validation and test. Learn from the data and generate prediction.
+- *self_learning_prediction*: The same of MT learning prediction but for SS setting. Infact it will learn from the past data and will genereate one single prediction which will be added to past data and will be used for make future predictions in a recursive way.
