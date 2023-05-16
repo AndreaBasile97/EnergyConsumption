@@ -33,15 +33,17 @@ The problem now is, how to let our model to understand the spatial informations 
 
 - **LISA** : is an indicator value that highlight the correlation in terms of consumption based on the distance between consumers. Basically, this indicator will tell us how much, the energy consumption of a customer *A* is similar to the energy consumption of *B* knowing that *A* and *B* are neighborgs or not. This is done through tha Neighborood matrix which will tell what are the customers that are close each other. then, we normalize the matrix and each descriptive features of the consumers. Then, the indicator score $I$ is computed for each single consumer and added as additional *feature descriptors*.
 
-$$ N[c_a, c_b] = \begin{cases} 
-    1 & \text{if } dist(c_a, c_b)<maxDist\\
-    0 & \text{otherwise } \\
-\end{cases} 
+$$ 
+N[c_a, c_b] = 
+\begin{cases} 
+1 & \text{if } dist(c_a, c_b)<\text{maxDist}\\
+0 & \text{otherwise }
+\end{cases}
 $$
 
 $$ ... \text{ normalize N } and \text{ x }... $$
 
-$$ I_{x,c_a} = x'_{c_a} \sum (N'[c_a, c_i]* x'_{c_i}) $$
+$$ I_{x,c_a} = x_{c_a}' \sum_{i} (N_{c_a, c_i}'* x_{c_i}') $$
 
 
 Note: $maxDist$ is an hyperparameter.
