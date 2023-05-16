@@ -79,7 +79,10 @@ class Configurator:
 
         print(df_.dtypes)
 
-        df = df_.with_columns([pl.col(["lat", "lon"]).map(np.radians)])
+         # Convert 'city' column to category and then to ordinal numbers
+        df = df_.with_columns([pl.col('city').cast(pl.Categorical).cast(pl.UInt32)])
+
+        df = df.with_columns([pl.col(["lat", "lon"]).map(np.radians)])
 
         if ("SS-DT" in self.configuration) or ("SS-DTP" in self.configuration):
            df = self.add_features(df, self.key, self.windows_size, self.histFeatures, type='lag').drop_nulls()
@@ -87,11 +90,6 @@ class Configurator:
         elif 'MULTI-STEP' in self.configuration:
             df = self.add_features(df, self.key, self.windows_size, self.histFeatures, "lag")
             df = self.add_features(df, self.key, self.n_targets, [self.target], "lead")
-
-            # #nel caso di granularità mensile
-            # #df = df.filter(pl.col(self.dateCol).dt.month() == 1).drop_nulls()
-            # df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (
-            #             pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
 
             """
             #Nel caso di granularità quart'oraria con 16 valori di target

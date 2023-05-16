@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
     dataset = pl.read_csv(pathCSV, try_parse_dates=True, use_pyarrow=True)
 
-    dataset = dataset.drop("city")
+    # dataset = dataset.drop("city")
 
     # aggiungiamo le feature temporali di anno e mese
     dataset = dataset.with_columns(pl.col("date").dt.year().alias("year"))
