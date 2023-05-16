@@ -53,45 +53,11 @@ class Configurator:
         res = sum((np.array(neig) * np.array(norm["z"])).ravel()) * row[0]
         return res
 
-    def LISA(self, df_mod, threshold, features, distance_matrix):
-        key_values = df_mod[self.key].unique().cast(pl.Utf8).to_list()
-        matrix_km = pl.DataFrame(distance_matrix, schema=key_values)
 
-        matrix_neighborood = matrix_km.select([pl.all().apply(lambda x: 1 if x < threshold else 0)])
-        n_pa = np.array(matrix_neighborood.apply(lambda x: (1 / sum(x)))).flatten()
-        transformed_matrix = pl.from_numpy(np.multiply(matrix_neighborood, n_pa), schema=matrix_neighborood.columns)
-        transformed_matrix = transformed_matrix.with_columns(pl.Series(name="index", values=key_values))
-
-        for feature in features:
-            print("Compute LISA for", feature)
-            normalization = pl.DataFrame()
-            for c in key_values:
-                des = df_mod.filter(pl.col(self.key) == int(c)).describe().filter(
-                    pl.col("describe").is_in(["mean", "std"]))[:, feature]
-                df_cliente = df_mod.filter(pl.col(self.key) == int(c))
-
-                if des[1].item() != 0:
-                    normalization = pl.concat(
-                        [normalization, pl.DataFrame([((df_cliente[feature] - des[0].item()) / des[1].item()),
-                                                      pl.Series(self.key, np.full(len(df_cliente), c)),
-                                                      df_cliente[self.dateCol]])])
-                else:
-                    normalization = pl.concat([normalization, pl.DataFrame([df_cliente[feature],
-                                                                            pl.Series(self.key,
-                                                                                      np.full(len(df_cliente), c)),
-                                                                            df_cliente[self.dateCol]])])
-
-            normalization.columns = ["z", self.key, self.dateCol]
-            res = []
-            for row in normalization.rows():
-                local_moran = self.Local_Moran(transformed_matrix, normalization, row)
-                res.append(local_moran)
-            df_mod = df_mod.with_columns(pl.Series(name="lisa_" + feature, values=res))
-        return df_mod
 
     def add_features(self, df, key, window_size, features, type='lag'):
         """
-        funzione che mi permette di aggiungere come features descrittive del dataset i valori di "features" dei "window_size" timestep precedenti al target
+        funzione che mi permette di aggiungere, come features descrittive del dataset, i valori di "features" dei "window_size" timestep precedenti al target
         key: rappresenta la feature sulla quale devo raggruppare
         window_size: rappresenta il numero di timestep precedenti che devo considerare come feature
         features: rappresenta le features di cui vogliamo prendere i valori precedenti
@@ -122,16 +88,16 @@ class Configurator:
             df = self.add_features(df, self.key, self.windows_size, self.histFeatures, "lag")
             df = self.add_features(df, self.key, self.n_targets, [self.target], "lead")
 
-            #nel caso di granularità mensile
-            #df = df.filter(pl.col(self.dateCol).dt.month() == 1).drop_nulls()
-            df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (
-                        pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
+            # #nel caso di granularità mensile
+            # #df = df.filter(pl.col(self.dateCol).dt.month() == 1).drop_nulls()
+            # df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (
+            #             pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
 
             """
             #Nel caso di granularità quart'oraria con 16 valori di target
             # filtro ogni 4 ore per ottenere il setting considerato
-            df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
             """
+            df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
 
         if self.spatial_method in ["PCNM", "LISA"]:
             df = self.spatial(df, self.spatial_method)
@@ -215,33 +181,4 @@ class Configurator:
 
         return orig, pred, dates
 
-
-
-"""
-def normal_year(df):
-    col_year = [c for c in df.columns if "year" in c]
-    normalizer = MinMaxScaler()
-    for col in col_year:
-        df.loc[:, col] = normalizer.fit_transform(df[col].values.reshape(-1, 1))
-    return df
-
-
-def calculate_rad(actual, target):
-    circonferenza = 2 * np.pi
-    r1 = 360 * actual / 12
-    r2 = 360 * target / 12
-    ris = abs(r1 - r2)
-    if ris > 180:
-        ris = 360 - ris
-    return circonferenza - ((circonferenza / 12) * (ris / 30))
-
-
-def cyclical_month(train, test):
-    col_month = [c for c in train.columns if "month" in c]
-    for col in col_month:
-        train.loc[:, col] = train.loc[:, col].apply(lambda x: calculate_rad(x, test.month.values[0]))
-        test.loc[:, col] = test.loc[:, col].apply(lambda x: calculate_rad(x, test.month.values[0]))
-
-    return train, test
-"""
 
