@@ -132,9 +132,11 @@ class Configurator:
         X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]), \
                            test.select(pl.col(list(col_target)))
         
+        X_train.write_csv("ExampleDataframeTrain.csv")
+        X_test.write_csv("ExampleDataframeTest.csv")
+
         method.fit(X_train, y_train)
         y_pred = method.predict(X_test)
-        print(y_pred)
 
         return y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key]
 

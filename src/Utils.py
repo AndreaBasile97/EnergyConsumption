@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument("--dateCol", help="timestamp column name", type=str, default="date")
     parser.add_argument("--windowSize", help="length window size", type=int, default=12)
     parser.add_argument("--numTargets", help="number of targets time-step", type=int, default=12)
-    parser.add_argument("--spatial", help="spatial method", type=str, default=None)
+    parser.add_argument("--spatial", help="spatial method", type=str, default="PCNM")
     parser.add_argument("--temporal", help="temporal method", type=str, default=None)
 
 
@@ -29,21 +29,8 @@ def model_evaluation(orig, pred, dates, configuration, model, start_pred_date,en
         os.makedirs("output/predictions/")
 
     score = pl.DataFrame()
-    if ("SS-DT" in configuration) or ("SS-DTP" in configuration):
 
-        score = score.with_columns(pl.Series(name="rse",
-                values=[1 - r2_score(orig.filter(pl.col("date") == date).select(pl.col(target)),
-                                     pred.filter(pl.col("date") == date).select(pl.col(target))) for date in dates.rows()]))
-        score = score.with_columns(pl.Series(name="R2",
-                                             values=[r2_score(orig.filter(pl.col("date") == date).select(pl.col(target)),
-                                                 pred.filter(pl.col("date") == date).select(pl.col(target))) for
-                                                     date in dates.rows()]))
-
-        orig[:, (key, "date", target)].join(pred[:, (key, "date", target)], on=[key, 'date'])\
-            .write_csv("output/predictions/" + configuration + "_" + type(model).__name__ + ".csv")
-        print(score)
-
-    elif 'MULTI-STEP' in configuration:
+    if 'MULTI-STEP' in configuration:
         score = score.with_columns(pl.Series(name="rmse", values=[mean_squared_error(orig[:, int(i)], pred[:, int(i)], squared=False) for i in np.arange(n_targets)]))
         score = score.with_columns(pl.Series(name="rse",
                                              values=[1 - r2_score(orig[:, int(i)], pred[:, int(i)]) for i in np.arange(n_targets)]))
@@ -68,19 +55,3 @@ def model_evaluation(orig, pred, dates, configuration, model, start_pred_date,en
         media.write_csv(f, has_header=False)
 
     return score
-
-
-"""
-def create_csv(path, df, year):
-    train = df[df.data.dt.year < year].dropna().drop(['data'], axis=1)
-    test = df[df.data.dt.year == year].dropna().drop(['data'], axis=1)
-
-    cols = train.columns
-    col = [i for i in cols if "year" in i or "month" in i]
-    train[col] = train[col].astype(int)
-    test[col] = test[col].astype(int)
-
-    train.to_csv(path + '/train_' + str(year) + '.csv', index=False)
-    test.to_csv(path + '/test_' + str(year) + '.csv', index=False)
-
-    print("train.csv / test.csv created for year", year)"""

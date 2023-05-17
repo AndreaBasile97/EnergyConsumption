@@ -232,6 +232,9 @@ Predictions have this structure:
 
 The predictions are made on a time window defined by start_pred_date and end_pred_date. So if you chose as time filter 'n' then, the number of prediction will be:
 
-        predictions_per_user = hours_between(start_pred_date, end_pred_date) / time_filter
+        predictions_per_user = hours_between(start_pred_date, end_pred_date) / hours_time_filter + 1
 
-Each single prediction contains 'numTarget' sub-predictions for the target choosen (example: 16).
+NB: if the filter is in 'minutes' then consider minutes_between instead of hours_between.
+
+Each single prediction contains 'numTarget' sub-predictions for the target choosen (example: 16). Furthemore, 'numTarget' can be equal to 'predictions_per_user' but the first represent how many GTs we have in a single row, while the second represent the number of row-predictions will be for a single client.
+
