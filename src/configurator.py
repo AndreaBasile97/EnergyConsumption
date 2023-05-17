@@ -89,14 +89,14 @@ class Configurator:
 
         elif 'MULTI-STEP' in self.configuration:
             df = self.add_features(df, self.key, self.windows_size, self.histFeatures, "lag")
-            df = self.add_features(df, self.key, self.n_targets, [self.target], "lead")
+            df = self.add_features(df, self.key, self.n_targets, [self.target], "lead").drop_nulls()
 
             """
             #Nel caso di granularità quart'oraria con 16 valori di target
             # filtro ogni 4 ore per ottenere il setting considerato
             """
             # This is date filter for each row of the dataframe.
-            df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
+            # df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
 
         if self.spatial_method in ["PCNM", "LISA"]:
             df = self.spatial(df, self.spatial_method)
