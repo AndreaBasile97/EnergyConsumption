@@ -95,6 +95,7 @@ class Configurator:
             #Nel caso di granularità quart'oraria con 16 valori di target
             # filtro ogni 4 ore per ottenere il setting considerato
             """
+            # This is date filter for each row of the dataframe.
             df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
 
         if self.spatial_method in ["PCNM", "LISA"]:
@@ -130,53 +131,10 @@ class Configurator:
 
         X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]), \
                            test.select(pl.col(list(col_target)))
-
+        
         method.fit(X_train, y_train)
         y_pred = method.predict(X_test)
+        print(y_pred)
 
         return y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key]
-
-
-    def self_learning_prediction(self, df, start_pred_date, end_pred_date, method):
-
-        # save original dataset to compare the predictions
-        orig = df.filter((pl.col(self.dateCol) >= start_pred_date) & (pl.col(self.dateCol) <= end_pred_date)) if end_pred_date \
-            else df.filter(pl.col(self.dateCol) >= start_pred_date)
-
-        dates = orig.select(pl.col(self.dateCol).sort()).unique()
-        df = df.sort(self.dateCol)
-
-        # make prediction for each target time-step and update dataframe
-        for date in dates.rows():
-            train = df.filter(pl.col(self.dateCol) < date)
-
-            X_train, y_train = train.drop([self.key, self.dateCol, self.target]), train.select(pl.col(self.target))
-
-            test = df.filter((pl.col(self.dateCol) == date))
-
-            X_test, y_test = test.drop([self.key, self.dateCol, self.target]), test.select(pl.col(self.target))
-
-            """if type in ["cyclical_month", "both_temporal"]:
-                X_train, X_test = cyclical_month(X_train, X_test)"""
-
-            method.fit(X_train, y_train)
-            y_pred = method.predict(X_test)
-
-            # update dataframe with the prediction of the single value
-            idx = df.select(pl.arg_where(pl.col(self.dateCol) == date)).to_series()
-            df_mod = df.with_columns(df[self.target].set_at_idx(idx, pl.Series(y_pred.flatten())))
-
-            dates_to_update = [d for d in dates.rows() if d > date]
-
-            # update also the historical values
-            for j, d in enumerate(dates_to_update[:self.windows_size]):
-                idx = df.select(pl.arg_where(pl.col(self.dateCol) == d)).to_series()
-                df = df_mod.with_columns(df[self.target +"_hist_"+ str(j + 1)].set_at_idx(idx, pl.Series(y_pred.flatten())))
-
-        # save the new dataframe with predictions
-        pred = df.filter((pl.col(self.dateCol) >= start_pred_date) & (pl.col(self.dateCol) <= end_pred_date)) if end_pred_date \
-            else df.filter(pl.col(self.dateCol) >= start_pred_date)
-
-        return orig, pred, dates
-
 
