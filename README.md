@@ -165,6 +165,11 @@ Then there are 7 methods:
 
 ## Examples
 
+<div style="background-color:white;">
+    <img src="diagram.drawio.svg" alt="Alt text" style="max-width:100%; width:auto; height:auto;">
+</div>
+<br>
+
 ### 🔙 Historical Features
 
 'grid_hist_1', 'solar_hist_1', ... , 'grid_hist_16', 'solar_hist_16', 
