@@ -63,11 +63,11 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
         os.makedirs(f"output/predictions_{len(results)}fold/")
 
     scores = []
-    months = []
+    windows = []
     for result in results:
-        orig, pred, dates, key_val, month = result
+        orig, pred, dates, key_val, window = result
 
-        months.append(month)
+        windows.append(window)
         score = pl.DataFrame()
 
         if 'MULTI-STEP' in configuration:
@@ -81,16 +81,28 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
                       real_pred, fmt='%s', delimiter=',')
         scores.append(score)
 
-    # average scores across all results
+        # Saving the 
+        media = score.mean().select(pl.all().apply(lambda x: np.round(x,3)))
+        media = media.with_columns(window=pl.lit(str(window)))
+        media = media.with_columns(pl.lit(configuration).alias('conf'), pl.lit(str(model)).alias('method'))
+
+        print(media)
+
+        file = Path("output/" + type(model).__name__ + "_" + configuration.split("_")[0] + "_" + str(window) + ".csv")
+        with open(file, mode="ab") as f:
+            media.write_csv(f, has_header=False)
+
+
+    # average scores across all results of the cross_fold
     avg_score = pl.concat(scores).mean()
 
     avg_score = avg_score.select(pl.all().apply(lambda x: np.round(x,3)))
-    avg_score = avg_score.with_columns(month=pl.lit(str(months)))
+    avg_score = avg_score.with_columns(window=pl.lit(str(windows)))
     avg_score = avg_score.with_columns(pl.lit(configuration).alias('conf'), pl.lit(str(model)).alias('method'))
 
     print(avg_score)
 
-    file = Path("output/" + type(model).__name__ + "_" + configuration.split("_")[0] + ".csv")
+    file = Path("output/" + type(model).__name__ + "_" + configuration.split("_")[0] + "_" + "k_fold_mean" + ".csv")
     with open(file, mode="ab") as f:
         avg_score.write_csv(f, has_header=False)
 
