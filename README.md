@@ -48,7 +48,7 @@ $$ I_{x,c_a} = x_{c_a}' \sum_{i} (N_{c_a, c_i}'* x_{c_i}') $$
 
 Note: $maxDist$ is an hyperparameter.
 
-- **PCNM** ⭐: This approach is slightly different from LISA. Basically we need $D$ that is the matrix containing the Harvesine-Distance between consumers. Then compute a truncated distance matrix $D^*$ and perform the **PCoA** (Principal Coordinate Analysis) on $D^*$. Computing the PCoA
+- **PCNM** ⭐: This approach is slightly different from LISA. Basically we need $D$ that is the matrix containing the Harvesine-Distance between consumers. Then compute a truncated distance matrix $ D^* $ and perform the **PCoA** (Principal Coordinate Analysis) on $ D^* $. Computing the PCoA
 
 
 $$ D^* = \begin{cases} 
