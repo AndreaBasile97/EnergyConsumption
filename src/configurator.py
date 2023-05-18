@@ -79,25 +79,24 @@ class Configurator:
 
         print(df_.dtypes)
 
-        df = df_.with_columns([pl.col(["lat", "lon"]).map(np.radians)])
+         # Convert 'city' column to category and then to ordinal numbers
+        df = df_.with_columns([pl.col('city').cast(pl.Categorical).cast(pl.UInt32)])
+
+        df = df.with_columns([pl.col(["lat", "lon"]).map(np.radians)])
 
         if ("SS-DT" in self.configuration) or ("SS-DTP" in self.configuration):
            df = self.add_features(df, self.key, self.windows_size, self.histFeatures, type='lag').drop_nulls()
 
         elif 'MULTI-STEP' in self.configuration:
             df = self.add_features(df, self.key, self.windows_size, self.histFeatures, "lag")
-            df = self.add_features(df, self.key, self.n_targets, [self.target], "lead")
-
-            # #nel caso di granularità mensile
-            # #df = df.filter(pl.col(self.dateCol).dt.month() == 1).drop_nulls()
-            # df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (
-            #             pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
+            df = self.add_features(df, self.key, self.n_targets, [self.target], "lead").drop_nulls()
 
             """
             #Nel caso di granularità quart'oraria con 16 valori di target
             # filtro ogni 4 ore per ottenere il setting considerato
             """
-            df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
+            # This is date filter for each row of the dataframe.
+            # df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
 
         if self.spatial_method in ["PCNM", "LISA"]:
             df = self.spatial(df, self.spatial_method)
@@ -108,14 +107,14 @@ class Configurator:
         return df, self.configuration
 
     def prediction(self, df, start_pred_date, end_pred_date, method):
-        if ("SS-DT" in self.configuration) or ("SS-DTP" in self.configuration):
-            df_mod = df.clone()
-            orig, pred, dates = self.self_learning_prediction(df_mod.sort(self.dateCol), start_pred_date, end_pred_date, method)
-            return orig, pred, dates, None
-
-        elif 'MULTI-STEP' in self.configuration:
+        if 'MULTI-STEP' in self.configuration:
             orig, pred, dates, key_val = self.MT_learning_prediction(df.sort(self.dateCol), start_pred_date, end_pred_date, method)
             return orig, pred, dates, key_val
+        
+    def kfold_prediction(self, df, method, num_months_per_fold):
+        if 'MULTI-STEP' in self.configuration:
+            preds = self.MT_learning_prediction_cv(df.sort(self.dateCol), method, num_months_per_fold)
+            return preds
 
     def MT_learning_prediction(self, df, start_pred_date, end_pred_date, method):
         # - selection of target columns
@@ -132,6 +131,9 @@ class Configurator:
 
         X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]), \
                            test.select(pl.col(list(col_target)))
+        
+        X_train.write_csv("ExampleDataframeTrain.csv")
+        X_test.write_csv("ExampleDataframeTest.csv")
 
         method.fit(X_train, y_train)
         y_pred = method.predict(X_test)
@@ -139,46 +141,30 @@ class Configurator:
         return y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key]
 
 
-    def self_learning_prediction(self, df, start_pred_date, end_pred_date, method):
 
-        # save original dataset to compare the predictions
-        orig = df.filter((pl.col(self.dateCol) >= start_pred_date) & (pl.col(self.dateCol) <= end_pred_date)) if end_pred_date \
-            else df.filter(pl.col(self.dateCol) >= start_pred_date)
+    def MT_learning_prediction_cv(self, df, method, num_months_per_fold = 3):
+        
+        prediction_results = []
 
-        dates = orig.select(pl.col(self.dateCol).sort()).unique()
-        df = df.sort(self.dateCol)
+        months = np.unique(df['month'].to_numpy())
+        assert num_months_per_fold > 1 and num_months_per_fold <= len(months), f'The number of months {num_months_per_fold} is not valid since it must be at least 2 and max {len(months)}'
 
-        # make prediction for each target time-step and update dataframe
-        for date in dates.rows():
-            train = df.filter(pl.col(self.dateCol) < date)
+        # Creating sliding windows
+        month_windows = [months[i:i + num_months_per_fold] for i in range(len(months) - num_months_per_fold + 1)]
 
-            X_train, y_train = train.drop([self.key, self.dateCol, self.target]), train.select(pl.col(self.target))
+        print(month_windows)
 
-            test = df.filter((pl.col(self.dateCol) == date))
-
-            X_test, y_test = test.drop([self.key, self.dateCol, self.target]), test.select(pl.col(self.target))
-
-            """if type in ["cyclical_month", "both_temporal"]:
-                X_train, X_test = cyclical_month(X_train, X_test)"""
+        col_target = [col for col in df.columns if self.target in col and "hist" not in col]
+        for window in month_windows:
+            train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
+            X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
+            
+            test = df.filter(pl.col('month') == window[2])
+            X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
 
             method.fit(X_train, y_train)
             y_pred = method.predict(X_test)
+            prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key], window))
 
-            # update dataframe with the prediction of the single value
-            idx = df.select(pl.arg_where(pl.col(self.dateCol) == date)).to_series()
-            df_mod = df.with_columns(df[self.target].set_at_idx(idx, pl.Series(y_pred.flatten())))
-
-            dates_to_update = [d for d in dates.rows() if d > date]
-
-            # update also the historical values
-            for j, d in enumerate(dates_to_update[:self.windows_size]):
-                idx = df.select(pl.arg_where(pl.col(self.dateCol) == d)).to_series()
-                df = df_mod.with_columns(df[self.target +"_hist_"+ str(j + 1)].set_at_idx(idx, pl.Series(y_pred.flatten())))
-
-        # save the new dataframe with predictions
-        pred = df.filter((pl.col(self.dateCol) >= start_pred_date) & (pl.col(self.dateCol) <= end_pred_date)) if end_pred_date \
-            else df.filter(pl.col(self.dateCol) >= start_pred_date)
-
-        return orig, pred, dates
-
+        return prediction_results
 

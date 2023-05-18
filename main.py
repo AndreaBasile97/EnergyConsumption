@@ -6,47 +6,57 @@ from src.configurator import Configurator
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
-from src.Utils import get_args,model_evaluation
-
+from src.Utils import get_args,model_evaluation, model_evaluation_cv
+import numpy as np
 #python main.py --pathCSV energy.csv --config MULTI-STEP --target energy_consumption --histFeatures "energy_consumption" --key customer --dateCol date --windowSize 12 --numTargets 12 --spatial None --temporal None
 #python main.py --pathCSV "energy_consumption.csv" --config MULTI-STEP --target grid --histFeatures "grid,solar" --key house --dateCol date --windowSize 16 --numTargets 16
 # Per SS-DTP in histFeatures avremo "energy_consumption,year,month"
 
 if __name__ == '__main__':
+
+    # get args from the prompt
     pathCSV, config, target, histFeatures, key, dateCol, windowSize, numTargets, spatial, temporal = get_args()
     histFeatures = [str(item) for item in histFeatures.split(',')]
     print(pathCSV, config, target, histFeatures, key, dateCol, windowSize, numTargets)
 
-
+    # select the methods
     methods = [RandomForestRegressor(n_jobs=-1, random_state=1),
                KNeighborsRegressor(n_neighbors=3, n_jobs=-1),
                LinearRegression(n_jobs=-1)]
 
 
-    # istanziamo un oggetto di Classe Configurator con tutte le informazioni necessarie alla trasformazione del datset
+    # set the configurator
     conf = Configurator(configuration=config, windows_size=windowSize, n_targets=numTargets,target=target,key=key,
                         dateCol=dateCol, histFeatures=histFeatures, spatial=spatial, temporal=temporal)
 
     dataset = pl.read_csv(pathCSV, try_parse_dates=True, use_pyarrow=True)
 
-    dataset = dataset.drop("city")
-
-    # aggiungiamo le feature temporali di anno e mese
+    # add temporal features (year and month) as numerical 
     dataset = dataset.with_columns(pl.col("date").dt.year().alias("year"))
     dataset = dataset.with_columns(pl.col("date").dt.month().alias("month"))
 
-    # trasformazione del dataset nel setting specificato
+
+    # 1) Transformation of the dataset
     df, config = conf.transform(dataset)
 
-    # settiamo il range di date che verranno utilizzate per la creazione del test set
+
+    
+
+    df.write_csv("ExampleDataframe.csv")
+
+    # 2) Set the date range for predictions (test-set)
     start_pred_date = datetime.strptime('2019-05-20 00:00:00', '%Y-%m-%d %H:%M:%S')
-    end_pred_date = datetime.strptime('2019-05-21 20:00:00', '%Y-%m-%d %H:%M:%S')
+    end_pred_date = datetime.strptime('2019-05-20 00:30:00', '%Y-%m-%d %H:%M:%S')
 
-    # valutiamo ogni metodo di regressione sul test set e memorizziamo l'output su file
+    # 3) do predictions with the methods specified above
+    # for method in methods:
+    #     orig, pred, dates, key_val = conf.prediction(df, start_pred_date, end_pred_date,method)
+    #     # 4) evaluate the model saving the results on files
+    #     score = model_evaluation(orig, pred, dates, config, method, start_pred_date,end_pred_date, key_val, numTargets, target, key)
+
+
+
     for method in methods:
-        orig, pred, dates, key_val = conf.prediction(df, start_pred_date, end_pred_date,method)
-        score = model_evaluation(orig, pred, dates, config, method, start_pred_date,end_pred_date, key_val, numTargets, target, key)
-
-
-
-
+        preds = conf.kfold_prediction(df, method, num_months_per_fold=3)
+        # 4) evaluate the model saving the results on files
+        score = model_evaluation_cv(preds, config, method, numTargets, target, key)
