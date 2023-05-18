@@ -6,8 +6,8 @@ from src.configurator import Configurator
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
-from src.Utils import get_args,model_evaluation
-
+from src.Utils import get_args,model_evaluation, model_evaluation_cv
+import numpy as np
 #python main.py --pathCSV energy.csv --config MULTI-STEP --target energy_consumption --histFeatures "energy_consumption" --key customer --dateCol date --windowSize 12 --numTargets 12 --spatial None --temporal None
 #python main.py --pathCSV "energy_consumption.csv" --config MULTI-STEP --target grid --histFeatures "grid,solar" --key house --dateCol date --windowSize 16 --numTargets 16
 # Per SS-DTP in histFeatures avremo "energy_consumption,year,month"
@@ -39,6 +39,9 @@ if __name__ == '__main__':
     # 1) Transformation of the dataset
     df, config = conf.transform(dataset)
 
+
+    
+
     df.write_csv("ExampleDataframe.csv")
 
     # 2) Set the date range for predictions (test-set)
@@ -46,11 +49,14 @@ if __name__ == '__main__':
     end_pred_date = datetime.strptime('2019-05-20 00:30:00', '%Y-%m-%d %H:%M:%S')
 
     # 3) do predictions with the methods specified above
+    # for method in methods:
+    #     orig, pred, dates, key_val = conf.prediction(df, start_pred_date, end_pred_date,method)
+    #     # 4) evaluate the model saving the results on files
+    #     score = model_evaluation(orig, pred, dates, config, method, start_pred_date,end_pred_date, key_val, numTargets, target, key)
+
+
+
     for method in methods:
-        orig, pred, dates, key_val = conf.prediction(df, start_pred_date, end_pred_date,method)
+        preds = conf.kfold_prediction(df, method, num_months_per_fold=3)
         # 4) evaluate the model saving the results on files
-        score = model_evaluation(orig, pred, dates, config, method, start_pred_date,end_pred_date, key_val, numTargets, target, key)
-
-
-
-
+        score = model_evaluation_cv(preds, config, method, numTargets, target, key)

@@ -4,6 +4,7 @@ from pathlib import Path
 from sklearn.metrics import r2_score, mean_squared_error
 import argparse
 import os
+import calendar
 
 def get_args():
     parser = argparse.ArgumentParser(description="Model parameters")
@@ -55,3 +56,42 @@ def model_evaluation(orig, pred, dates, configuration, model, start_pred_date,en
         media.write_csv(f, has_header=False)
 
     return score
+
+
+def model_evaluation_cv(results, configuration, model, n_targets, target, key):
+    if not os.path.exists(f"output/predictions_{len(results)}fold/"):
+        os.makedirs(f"output/predictions_{len(results)}fold/")
+
+    scores = []
+    months = []
+    for result in results:
+        orig, pred, dates, key_val, month = result
+
+        months.append(month)
+        score = pl.DataFrame()
+
+        if 'MULTI-STEP' in configuration:
+            score = score.with_columns(pl.Series(name="rmse", values=[mean_squared_error(orig[:, int(i)], pred[:, int(i)], squared=False) for i in np.arange(n_targets)]))
+            score = score.with_columns(pl.Series(name="rse",values=[1 - r2_score(orig[:, int(i)], pred[:, int(i)]) for i in np.arange(n_targets)]))
+            score = score.with_columns(pl.Series(name="r2",values=[r2_score(orig[:, int(i)], pred[:, int(i)]) for i in np.arange(n_targets)]))
+            # write on file: key variable, real and predicted values
+            real_pred = np.concatenate((list(map(lambda el: [el], np.array(key_val))), orig.to_numpy(), pred.to_numpy()),axis=1)
+
+            np.savetxt(f"output/predictions_{len(results)}fold/"+ configuration + "_" + type(model).__name__ + "kfold.csv",
+                      real_pred, fmt='%s', delimiter=',')
+        scores.append(score)
+
+    # average scores across all results
+    avg_score = pl.concat(scores).mean()
+
+    avg_score = avg_score.select(pl.all().apply(lambda x: np.round(x,3)))
+    avg_score = avg_score.with_columns(month=pl.lit(str(months)))
+    avg_score = avg_score.with_columns(pl.lit(configuration).alias('conf'), pl.lit(str(model)).alias('method'))
+
+    print(avg_score)
+
+    file = Path("output/" + type(model).__name__ + "_" + configuration.split("_")[0] + ".csv")
+    with open(file, mode="ab") as f:
+        avg_score.write_csv(f, has_header=False)
+
+    return avg_score

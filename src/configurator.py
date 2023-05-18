@@ -107,14 +107,14 @@ class Configurator:
         return df, self.configuration
 
     def prediction(self, df, start_pred_date, end_pred_date, method):
-        if ("SS-DT" in self.configuration) or ("SS-DTP" in self.configuration):
-            df_mod = df.clone()
-            orig, pred, dates = self.self_learning_prediction(df_mod.sort(self.dateCol), start_pred_date, end_pred_date, method)
-            return orig, pred, dates, None
-
-        elif 'MULTI-STEP' in self.configuration:
+        if 'MULTI-STEP' in self.configuration:
             orig, pred, dates, key_val = self.MT_learning_prediction(df.sort(self.dateCol), start_pred_date, end_pred_date, method)
             return orig, pred, dates, key_val
+        
+    def kfold_prediction(self, df, method, num_months_per_fold):
+        if 'MULTI-STEP' in self.configuration:
+            preds = self.MT_learning_prediction_cv(df.sort(self.dateCol), method, num_months_per_fold)
+            return preds
 
     def MT_learning_prediction(self, df, start_pred_date, end_pred_date, method):
         # - selection of target columns
@@ -139,4 +139,32 @@ class Configurator:
         y_pred = method.predict(X_test)
 
         return y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key]
+
+
+
+    def MT_learning_prediction_cv(self, df, method, num_months_per_fold = 3):
+        
+        prediction_results = []
+
+        months = np.unique(df['month'].to_numpy())
+        assert num_months_per_fold > 1 and num_months_per_fold <= len(months), f'The number of months {num_months_per_fold} is not valid since it must be at least 2 and max {len(months)}'
+
+        # Creating sliding windows
+        month_windows = [months[i:i + num_months_per_fold] for i in range(len(months) - num_months_per_fold + 1)]
+
+        print(month_windows)
+
+        col_target = [col for col in df.columns if self.target in col and "hist" not in col]
+        for window in month_windows:
+            train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
+            X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
+            
+            test = df.filter(pl.col('month') == window[2])
+            X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
+
+            method.fit(X_train, y_train)
+            y_pred = method.predict(X_test)
+            prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key], window))
+
+        return prediction_results
 
