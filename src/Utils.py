@@ -81,12 +81,10 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
                       real_pred, fmt='%s', delimiter=',')
         scores.append(score)
 
-        # Saving the 
+        # Saving the scores for a single fold
         media = score.mean().select(pl.all().apply(lambda x: np.round(x,3)))
         media = media.with_columns(window=pl.lit(str(window)))
         media = media.with_columns(pl.lit(configuration).alias('conf'), pl.lit(str(model)).alias('method'))
-
-        print(media)
 
         file = Path("output/" + type(model).__name__ + "_" + configuration.split("_")[0] + "_" + str(window) + ".csv")
         with open(file, mode="ab") as f:
