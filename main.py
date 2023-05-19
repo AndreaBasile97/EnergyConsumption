@@ -20,10 +20,10 @@ if __name__ == '__main__':
     print(pathCSV, config, target, histFeatures, key, dateCol, windowSize, numTargets)
 
     # select the methods
-    methods = [RandomForestRegressor(n_jobs=-1, random_state=1),
-               KNeighborsRegressor(n_neighbors=3, n_jobs=-1),
-               LinearRegression(n_jobs=-1)]
-
+    methods = [RandomForestRegressor(n_jobs=-1, random_state=1)]
+    # methods = [RandomForestRegressor(n_jobs=-1, random_state=1),
+    #            KNeighborsRegressor(n_neighbors=3, n_jobs=-1),
+    #            LinearRegression(n_jobs=-1)]
 
     # set the configurator
     conf = Configurator(configuration=config, windows_size=windowSize, n_targets=numTargets,target=target,key=key,
@@ -35,20 +35,12 @@ if __name__ == '__main__':
     dataset = dataset.with_columns(pl.col("date").dt.year().alias("year"))
     dataset = dataset.with_columns(pl.col("date").dt.month().alias("month"))
 
-
     # 1) Transformation of the dataset
     df, config = conf.transform(dataset)
 
 
-    # 3) do predictions with the methods specified above
-    # for method in methods:
-    #     orig, pred, dates, key_val = conf.prediction(df, start_pred_date, end_pred_date,method)
-    #     # 4) evaluate the model saving the results on files
-    #     score = model_evaluation(orig, pred, dates, config, method, start_pred_date,end_pred_date, key_val, numTargets, target, key)
-
-
-
     for method in methods:
+        #2) predictions
         preds = conf.kfold_prediction(df, method, num_months_per_fold=3)
-        # 4) evaluate the model saving the results on files
+        # 3) evaluatation
         score = model_evaluation_cv(preds, config, method, numTargets, target, key)
