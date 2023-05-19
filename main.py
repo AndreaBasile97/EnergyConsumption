@@ -40,14 +40,6 @@ if __name__ == '__main__':
     df, config = conf.transform(dataset)
 
 
-    
-
-    df.write_csv("ExampleDataframe.csv")
-
-    # 2) Set the date range for predictions (test-set)
-    start_pred_date = datetime.strptime('2019-05-20 00:00:00', '%Y-%m-%d %H:%M:%S')
-    end_pred_date = datetime.strptime('2019-05-20 00:30:00', '%Y-%m-%d %H:%M:%S')
-
     # 3) do predictions with the methods specified above
     # for method in methods:
     #     orig, pred, dates, key_val = conf.prediction(df, start_pred_date, end_pred_date,method)
