@@ -90,7 +90,6 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
         with open(file, mode="ab") as f:
             media.write_csv(f, has_header=False)
 
-
     # average scores across all results of the cross_fold
     avg_score = pl.concat(scores).mean()
 
