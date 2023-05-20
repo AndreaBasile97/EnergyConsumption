@@ -84,19 +84,18 @@ class Configurator:
 
         df = df.with_columns([pl.col(["lat", "lon"]).map(np.radians)])
 
+        # In this scenario we consider the hour and minutes as an important feature
+        df = df.with_columns([pl.col('date').dt.hour().alias('hour')])
+        df = df.with_columns([pl.col('date').dt.hour().alias('minutes')])
+        # Since we got only 2019, this feature is useless
+        df = df.drop('year')
+
         if ("SS-DT" in self.configuration) or ("SS-DTP" in self.configuration):
            df = self.add_features(df, self.key, self.windows_size, self.histFeatures, type='lag').drop_nulls()
 
         elif 'MULTI-STEP' in self.configuration:
             df = self.add_features(df, self.key, self.windows_size, self.histFeatures, "lag")
             df = self.add_features(df, self.key, self.n_targets, [self.target], "lead").drop_nulls()
-
-            """
-            #Nel caso di granularità quart'oraria con 16 valori di target
-            # filtro ogni 4 ore per ottenere il setting considerato
-            """
-            # This is date filter for each row of the dataframe.
-            # df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
 
         if self.spatial_method in ["PCNM", "LISA"]:
             df = self.spatial(df, self.spatial_method)
@@ -165,6 +164,10 @@ class Configurator:
             method.fit(X_train, y_train)
             y_pred = method.predict(X_test)
             prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key], window))
+
+        X_train.write_csv("ExampleDataframeTrain.csv")
+        X_test.write_csv("ExampleDataframeTest.csv")
+
 
         return prediction_results
 
