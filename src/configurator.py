@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.metrics.pairwise import haversine_distances
 from rpy2 import robjects as r
 import rpy2.robjects.numpy2ri
+from datetime import datetime, timedelta
 rpy2.robjects.numpy2ri.activate()
 
 class Configurator:
@@ -155,19 +156,25 @@ class Configurator:
 
         col_target = [col for col in df.columns if self.target in col and "hist" not in col]
         for window in month_windows:
-            train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
-            X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
-            
-            test = df.filter(pl.col('month') == window[2])
-            X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
 
+            train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
+            # Save the last date of the train set
+            train_last_date = train[self.dateCol].max()
+            print(f'last date of traning set: {train_last_date}')
+            X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
+            X_train.write_csv("ExampleDataframeTrain.csv")
+
+            # Shift train_last_date by 28 hours and filter test
+            train_last_date_shifted = train_last_date + timedelta(hours=28, minutes=15)
+
+            # The test set must start from the next month AND 28h later the last date of the training set to avoid overlapping
+            test = df.filter((pl.col('month') == window[2]) & (pl.col('date') > train_last_date_shifted))
+            print(f'first date of test set: {test[self.dateCol].min()}')
+            X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
+            X_test.write_csv("ExampleDataframeTest.csv")
             method.fit(X_train, y_train)
             y_pred = method.predict(X_test)
             prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key], window))
-
-        X_train.write_csv("ExampleDataframeTrain.csv")
-        X_test.write_csv("ExampleDataframeTest.csv")
-
-
+        
         return prediction_results
 
