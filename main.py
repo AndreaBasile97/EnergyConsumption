@@ -41,6 +41,10 @@ if __name__ == '__main__':
 
     for method in methods:
         #2) predictions
-        preds = conf.kfold_prediction(df, method, num_months_per_fold=3)
+        preds, trained_models = conf.kfold_prediction(df, method, num_months_per_fold=3)
         # 3) evaluatation
         score = model_evaluation_cv(preds, config, method, numTargets, target, key)
+
+    # preds = conf.kfold_prediction(df)
+    # # 3) evaluatation
+    # # score = model_evaluation_cv(preds, config, 'LSTM', numTargets, target, key)

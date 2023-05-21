@@ -4,7 +4,7 @@ from pathlib import Path
 from sklearn.metrics import r2_score, mean_squared_error
 import argparse
 import os
-import calendar
+from sklearn.preprocessing import MinMaxScaler
 
 def get_args():
     parser = argparse.ArgumentParser(description="Model parameters")
@@ -104,3 +104,11 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
         avg_score.write_csv(f, has_header=False)
 
     return avg_score
+
+
+def min_max_scale_polarsdf(df):
+    scaler = MinMaxScaler()
+    numpy_df = df.to_numpy()
+    scaler.fit(numpy_df)
+    scaled_df = scaler.transform(numpy_df)
+    return scaled_df
