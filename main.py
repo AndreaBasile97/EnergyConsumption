@@ -6,6 +6,11 @@ from src.configurator import Configurator
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
+from xgboost import XGBRegressor
+
+
+
+
 from src.Utils import get_args,model_evaluation, model_evaluation_cv
 import numpy as np
 #python main.py --pathCSV energy.csv --config MULTI-STEP --target energy_consumption --histFeatures "energy_consumption" --key customer --dateCol date --windowSize 12 --numTargets 12 --spatial None --temporal None
@@ -21,7 +26,8 @@ if __name__ == '__main__':
 
     # select the methods
     # methods = [RandomForestRegressor(n_jobs=-1, random_state=1)]
-    methods = [RandomForestRegressor(n_jobs=-1, random_state=1),
+    methods = [XGBRegressor(objective='reg:squarederror', n_estimators=200, learning_rate=0.05),
+               RandomForestRegressor(n_jobs=-1, random_state=1),
                KNeighborsRegressor(n_neighbors=3, n_jobs=-1),
                LinearRegression(n_jobs=-1)]
 
