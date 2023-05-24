@@ -7,9 +7,13 @@ from datetime import datetime, timedelta
 from src.Utils import min_max_scale_polarsdf
 from sklearn.metrics import r2_score
 import tensorflow as tf
-from src.lstm import create_model, compile_model, compute_metrics, train_and_predict
 import pandas as pd
 import pickle
+import torch
+from src.LSTM import *
+from collections import defaultdict
+import networkx as nx
+from tensorflow import keras
 
 rpy2.robjects.numpy2ri.activate()
 
@@ -26,20 +30,8 @@ class Configurator:
         self.temporal_method = temporal
 
     def spatial(self, df, type):
-        if type == "LISA":
-            lat_long = df[[self.key, "lat", "lon"]].unique().drop(self.key)
-
-            matrix = haversine_distances(lat_long)
-            # conversione in km
-            matrix = matrix * 6371000 / 1000
-            threshold = np.mean(matrix)
-
-            col_target = [col for col in df.columns if self.target in col and "hist" not in col]
-            # seleziono le colonne su cui calcolare LISA
-            col = [c for c in df.columns if c not in col_target and self.target in c]
-            df = self.LISA(df, float(threshold), col, matrix)
-
-        elif type == "PCNM":
+        print('Applying PCNM')
+        if type == "PCNM":
             r.r.source('src/pcnm.R')
             cabina = df.select(["lat", "lon"]).unique()
             matrix = haversine_distances(cabina)
@@ -54,13 +46,6 @@ class Configurator:
             df = df.join(pl.concat([cabina, eigenvectors], how="horizontal"), on=['lat', 'lon'])
 
         return df
-
-    def Local_Moran(self, transformed_matrix, normalization, row):
-        neig = transformed_matrix.filter(pl.col("index") == row[1])[:, transformed_matrix.columns != row[1]]
-        norm = normalization.filter((pl.col(self.dateCol) == row[2]) & (pl.col(self.key) != row[1]))
-        res = sum((np.array(neig) * np.array(norm["z"])).ravel()) * row[0]
-        return res
-
 
 
     def add_features(self, df, key, window_size, features, type='lag'):
@@ -83,18 +68,17 @@ class Configurator:
                     df = df.with_columns(pl.col(feature).shift(-i).over(key).alias(feature + '_' + str(i + 1)))
         return df
 
-    def transform(self, df_):
 
+    def transform(self, df_):
         print(df_.dtypes)
 
          # Convert 'city' column to category and then to ordinal numbers
         df = df_.with_columns([pl.col('city').cast(pl.Categorical).cast(pl.UInt32)])
 
         df = df.with_columns([pl.col(["lat", "lon"]).map(np.radians)])
-
         # In this scenario we consider the hour and minutes as an important feature
         df = df.with_columns([pl.col('date').dt.hour().alias('hour')])
-        df = df.with_columns([pl.col('date').dt.hour().alias('minutes')])
+        df = df.with_columns([pl.col('date').dt.minute().alias('minutes')])
         # Since we got only 2019, this feature is useless
         df = df.drop('year')
 
@@ -168,6 +152,80 @@ class Configurator:
         
         return prediction_results, trained_models
 
+
+    def MT_LSTM_prediction_cv(self, df, num_months_per_fold = 3):
+
+        print('LSTM starting learning...')
+
+        # create a pandas DataFrame to save the scores
+        scores_df = pd.DataFrame(columns=['RMSE', 'RSE', 'R2'])
+
+        # Create and compile the model
+        model = create_model()
+        model = compile_model(model)
+
+        prediction_results = []
+
+        months = np.unique(df['month'].to_numpy())
+        assert num_months_per_fold > 1 and num_months_per_fold <= len(months), f'The number of months {num_months_per_fold} is not valid since it must be at least 2 and max {len(months)}'
+
+        # Creating sliding windows
+        month_windows = [months[i:i + num_months_per_fold] for i in range(len(months) - num_months_per_fold + 1)]
+
+        print(month_windows)
+
+        col_target = [col for col in df.columns if self.target in col and "hist" not in col]
+        for window in month_windows:
+
+            train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
+            # Save the last date of the train set
+            train_last_date = train[self.dateCol].max()
+
+            # Change: Filter the data that comes before 20:15:00 of the latest date.
+            # train = train.filter((pl.col(self.dateCol) < train_last_date.replace(hour=20, minute=15, second=0)))
+            print(f'last date of traning set: {train[self.dateCol].max()}')
+
+            X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
+
+            X_train_array = min_max_scale_polarsdf(X_train)
+            X_train_reshaped = X_train_array.reshape((X_train_array.shape[0], 1, X_train_array.shape[1])) # shape should be (143500, 1, 204)
+
+
+            try:
+                # The test set must start from the next month AND 28h later the last date of the training set to avoid overlapping
+                # test = df.filter((pl.col('month') == window[2]) & (pl.col('date') > train_last_date_shifted))
+                test = df.filter((pl.col('month') == window[2]))
+                print(f'first date of test set: {test[self.dateCol].min()}')
+                X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
+
+                X_test_array = min_max_scale_polarsdf(X_test)
+                X_test_reshaped = X_test_array.reshape((X_test_array.shape[0], 1, X_test_array.shape[1]))            
+
+                y_pred = train_and_predict(model, X_train_reshaped, y_train, X_test_reshaped)
+
+                prediction_results.append(y_pred)
+
+                # Compute metrics on the test set
+                rmse, rse, r2 = compute_metrics(y_test, y_pred)
+
+                print(rmse, rse, r2)
+
+                # Save metrics to scores_df
+                new_row = pd.DataFrame({'RMSE': [rmse],
+                                        'RSE': [rse],
+                                        'R2': [r2]})
+                scores_df = pd.concat([scores_df, new_row], ignore_index=True)
+            except Exception as e:
+                print(e)
+                break
+
+            print('prediction concluded')
+
+        # Save scores_df and y_pred to CSV
+        scores_df.to_csv('scores.csv', index=False)
+        pd.DataFrame(y_pred).to_csv('y_pred.csv', index=False)
+
+        return prediction_results
 
 
     # # instead of taking the first two months as training set and the third mont as test set

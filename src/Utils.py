@@ -16,7 +16,7 @@ def get_args():
     parser.add_argument("--dateCol", help="timestamp column name", type=str, default="date")
     parser.add_argument("--windowSize", help="length window size", type=int, default=12)
     parser.add_argument("--numTargets", help="number of targets time-step", type=int, default=12)
-    parser.add_argument("--spatial", help="spatial method", type=str, default="PCNM")
+    parser.add_argument("--spatial", help="spatial method", type=str)
     parser.add_argument("--temporal", help="temporal method", type=str, default=None)
 
 
