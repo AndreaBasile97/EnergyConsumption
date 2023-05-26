@@ -5,7 +5,7 @@ from meteostat import Point, Hourly
 import pytz
 import pandas as pd
 from tqdm import tqdm
-
+import pandas as pd
 
 def get_weather_infos(location, date_string):
     # Convert the datetime string to a datetime object
@@ -47,14 +47,32 @@ def add_weather_info(row):
     row['pres'] = pres
     return row
 
+def weather_interpolation(dataset_path):
 
+    data = pd.read_csv(dataset_path)
+    
+    # convert date to datetime if it's not
+    data['date'] = pd.to_datetime(data['date'])
+
+    # Set 'date' as the index
+    data.set_index('date', inplace=True)
+
+    # interpolate missing values
+    data[['temp', 'dwpt', 'rhum', 'pres']] = data[['temp', 'dwpt', 'rhum', 'pres']].interpolate(method='time')
+
+    data.to_csv('interpolated_data.csv', index=True)
+
+    return data
+
+
+weather_interpolation('energy_consumption_weather.csv')
 # Load your data
-df = pd.read_csv('energy_consumption_weather.csv')
+# df = pd.read_csv('energy_consumption_weather.csv')
 
-# Create a wrapper around the DataFrame apply function for progress bar
-tqdm.pandas()
+# # Create a wrapper around the DataFrame apply function for progress bar
+# tqdm.pandas()
 
-# Use progress_apply instead of apply
-df = df.progress_apply(add_weather_info, axis=1)
+# # Use progress_apply instead of apply
+# df = df.progress_apply(add_weather_info, axis=1)
 
-df.to_csv('energy_consumption_weather.csv', index=False)
+# df.to_csv('energy_consumption_weather.csv', index=False)

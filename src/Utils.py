@@ -4,7 +4,7 @@ from pathlib import Path
 from sklearn.metrics import r2_score, mean_squared_error
 import argparse
 import os
-import calendar
+from sklearn.preprocessing import MinMaxScaler
 
 def get_args():
     parser = argparse.ArgumentParser(description="Model parameters")
@@ -16,7 +16,7 @@ def get_args():
     parser.add_argument("--dateCol", help="timestamp column name", type=str, default="date")
     parser.add_argument("--windowSize", help="length window size", type=int, default=12)
     parser.add_argument("--numTargets", help="number of targets time-step", type=int, default=12)
-    parser.add_argument("--spatial", help="spatial method", type=str, default="PCNM")
+    parser.add_argument("--spatial", help="spatial method", type=str)
     parser.add_argument("--temporal", help="temporal method", type=str, default=None)
 
 
@@ -86,7 +86,7 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
         media = media.with_columns(window=pl.lit(str(window)))
         media = media.with_columns(pl.lit(configuration).alias('conf'), pl.lit(str(model)).alias('method'))
 
-        file = Path("output/" + type(model).__name__ + "_" + configuration.split("_")[0] + "_" + str(window) + ".csv")
+        file = Path("output/week" + type(model).__name__ + "_" + configuration.split("_")[0] + "_" + str(window) + ".csv")
         with open(file, mode="ab") as f:
             media.write_csv(f, has_header=False)
 
@@ -104,3 +104,11 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
         avg_score.write_csv(f, has_header=False)
 
     return avg_score
+
+
+def min_max_scale_polarsdf(df):
+    scaler = MinMaxScaler()
+    numpy_df = df.to_numpy()
+    scaler.fit(numpy_df)
+    scaled_df = scaler.transform(numpy_df)
+    return scaled_df
