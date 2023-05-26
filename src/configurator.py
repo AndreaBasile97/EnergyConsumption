@@ -101,175 +101,189 @@ class Configurator:
         
     def kfold_prediction(self, df, method, num_months_per_fold):
         if 'MULTI-STEP' in self.configuration:
-            preds = self.MT_learning_prediction_cv(df.sort(self.dateCol), method, num_months_per_fold)
+            preds = self.MT_learning_prediction_week(df.sort(self.dateCol), method)
             return preds
 
 
-    # Prediction using regressors
-    def MT_learning_prediction_cv(self, df, method, num_months_per_fold = 3):
-        
+    def MT_learning_prediction_week(self, df, method):
         prediction_results = []
         trained_models = {}
 
-        months = np.unique(df['month'].to_numpy())
-        assert num_months_per_fold > 1 and num_months_per_fold <= len(months), f'The number of months {num_months_per_fold} is not valid since it must be at least 2 and max {len(months)}'
+        min_date = df[self.dateCol].min()
+        max_date = df[self.dateCol].max()
 
-        # Creating sliding windows
-        month_windows = [months[i:i + num_months_per_fold] for i in range(len(months) - num_months_per_fold + 1)]
+        train_end_date = min_date + timedelta(days=30)
+        test_start_date = train_end_date + timedelta(hours=28, minutes=15)
+        test_end_date = test_start_date + timedelta(days=7)
 
-        print(month_windows)
+        while test_end_date <= max_date:
+            train = df.filter((pl.col(self.dateCol) >= min_date) & (pl.col(self.dateCol) < train_end_date))
+            test = df.filter((pl.col(self.dateCol) >= test_start_date) & (pl.col(self.dateCol) < test_end_date))
 
-        col_target = [col for col in df.columns if self.target in col and "hist" not in col]
-        for i, window in enumerate(month_windows):
-
-            train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
-            # Save the last date of the train set
-            train_last_date = train[self.dateCol].max()
-
-            # Change: Filter the data that comes before 20:15:00 of the latest date.
-            train = train.filter((pl.col(self.dateCol) < train_last_date.replace(hour=20, minute=15, second=0)))
-            print(f'last date of traning set: {train[self.dateCol].max()}')
-
-            X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
-
-            # The test set must start from the next month
-            test = df.filter((pl.col('month') == window[2]))
-            print(f'first date of test set: {test[self.dateCol].min()}')
+            print(f'Training date range: {min_date} - {train_end_date}')
+            print(f'Testing date range: {test_start_date} - {test_end_date}')
+            
+            col_target = [col for col in df.columns if self.target in col and "hist" not in col]
+            
             try:
+                X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
                 X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
+
                 method.fit(X_train, y_train)
                 y_pred = method.predict(X_test)
-                prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key], window))
-                trained_models[i] = method  # save the trained model for this fold
-                #with open(f'model_{method}.pkl', 'wb') as f:  # Save model to disk
-                #    pickle.dump(method, f)
-                model_name = type(method).__name__
-                pickle.dump(method, open(f"{model_name}_regressor.pkl", "wb"))
 
+                # Convert datetime to string format for filename
+                filename = f"{test_start_date.strftime('%Y_%m_%d_%H_%M_%S')}_to_{test_end_date.strftime('%Y_%m_%d_%H_%M_%S')}"
+
+                prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key], filename))
+                
+                trained_models[train_end_date] = method  # save the trained model for this fold
             except Exception as e:
-                print(e)
+                print(f"An error occurred: {e}")
                 pass
-        
+
+            # Update the start and end dates for the next loop iteration
+            min_date = min_date + timedelta(days=7)
+            train_end_date = min_date + timedelta(days=30)
+            test_start_date = train_end_date + timedelta(hours=28, minutes=15)
+            test_end_date = test_start_date + timedelta(days=7)
+            
+            # Save the trained model
+        with open('XGBoosterWeek' + '.pkl', 'wb') as f:
+            pickle.dump(method, f)
+
         return prediction_results, trained_models
+    
+
+    
+    # Prediction using regressors
+    # def MT_learning_prediction_cv(self, df, method, num_months_per_fold = 3):
+        
+    #     prediction_results = []
+    #     trained_models = {}
+
+    #     months = np.unique(df['month'].to_numpy())
+    #     assert num_months_per_fold > 1 and num_months_per_fold <= len(months), f'The number of months {num_months_per_fold} is not valid since it must be at least 2 and max {len(months)}'
+
+    #     # Creating sliding windows
+    #     month_windows = [months[i:i + num_months_per_fold] for i in range(len(months) - num_months_per_fold + 1)]
+
+    #     print(month_windows)
+
+    #     col_target = [col for col in df.columns if self.target in col and "hist" not in col]
+    #     for i, window in enumerate(month_windows):
+
+    #         train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
+    #         # Save the last date of the train set
+    #         train_last_date = train[self.dateCol].max()
+
+    #         # Change: Filter the data that comes before 20:15:00 of the latest date.
+    #         train = train.filter((pl.col(self.dateCol) < train_last_date.replace(hour=20, minute=15, second=0)))
+    #         print(f'last date of traning set: {train[self.dateCol].max()}')
+
+    #         X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
+
+    #         # The test set must start from the next month
+    #         test = df.filter((pl.col('month') == window[2]))
+    #         print(f'first date of test set: {test[self.dateCol].min()}')
+    #         try:
+    #             X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
+    #             method.fit(X_train, y_train)
+    #             y_pred = method.predict(X_test)
+    #             prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key], window))
+    #             trained_models[i] = method  # save the trained model for this fold
+    #             #with open(f'model_{method}.pkl', 'wb') as f:  # Save model to disk
+    #             #    pickle.dump(method, f)
+    #             model_name = type(method).__name__
+    #             pickle.dump(method, open(f"{model_name}_regressor.pkl", "wb"))
+
+    #         except Exception as e:
+    #             print(e)
+    #             pass
+        
+    #     return prediction_results, trained_models
 
 
-    def MT_LSTM_prediction_cv(self, df, num_months_per_fold = 3):
-
-        print('LSTM starting learning...')
-
-        # create a pandas DataFrame to save the scores
-        scores_df = pd.DataFrame(columns=['RMSE', 'RSE', 'R2'])
-
-        # Create and compile the model
-        model = create_model()
-        model = compile_model(model)
-
-        prediction_results = []
-
-        months = np.unique(df['month'].to_numpy())
-        assert num_months_per_fold > 1 and num_months_per_fold <= len(months), f'The number of months {num_months_per_fold} is not valid since it must be at least 2 and max {len(months)}'
-
-        # Creating sliding windows
-        month_windows = [months[i:i + num_months_per_fold] for i in range(len(months) - num_months_per_fold + 1)]
-
-        print(month_windows)
-
-        col_target = [col for col in df.columns if self.target in col and "hist" not in col]
-        for window in month_windows:
-
-            train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
-            # Save the last date of the train set
-            train_last_date = train[self.dateCol].max()
-
-            # Change: Filter the data that comes before 20:15:00 of the latest date.
-            # train = train.filter((pl.col(self.dateCol) < train_last_date.replace(hour=20, minute=15, second=0)))
-            print(f'last date of traning set: {train[self.dateCol].max()}')
-
-            X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
-
-            X_train_array = min_max_scale_polarsdf(X_train)
-            X_train_reshaped = X_train_array.reshape((X_train_array.shape[0], 1, X_train_array.shape[1])) # shape should be (143500, 1, 204)
+        
 
 
-            try:
-                # The test set must start from the next month AND 28h later the last date of the training set to avoid overlapping
-                # test = df.filter((pl.col('month') == window[2]) & (pl.col('date') > train_last_date_shifted))
-                test = df.filter((pl.col('month') == window[2]))
-                print(f'first date of test set: {test[self.dateCol].min()}')
-                X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
+    # def MT_LSTM_prediction_cv(self, df, num_months_per_fold = 3):
 
-                X_test_array = min_max_scale_polarsdf(X_test)
-                X_test_reshaped = X_test_array.reshape((X_test_array.shape[0], 1, X_test_array.shape[1]))            
+    #     print('LSTM starting learning...')
 
-                y_pred = train_and_predict(model, X_train_reshaped, y_train, X_test_reshaped)
+    #     # create a pandas DataFrame to save the scores
+    #     scores_df = pd.DataFrame(columns=['RMSE', 'RSE', 'R2'])
 
-                prediction_results.append(y_pred)
+    #     # Create and compile the model
+    #     model = create_model()
+    #     model = compile_model(model)
 
-                # Compute metrics on the test set
-                rmse, rse, r2 = compute_metrics(y_test, y_pred)
+    #     prediction_results = []
 
-                print(rmse, rse, r2)
+    #     months = np.unique(df['month'].to_numpy())
+    #     assert num_months_per_fold > 1 and num_months_per_fold <= len(months), f'The number of months {num_months_per_fold} is not valid since it must be at least 2 and max {len(months)}'
 
-                # Save metrics to scores_df
-                new_row = pd.DataFrame({'RMSE': [rmse],
-                                        'RSE': [rse],
-                                        'R2': [r2]})
-                scores_df = pd.concat([scores_df, new_row], ignore_index=True)
-            except Exception as e:
-                print(e)
-                break
+    #     # Creating sliding windows
+    #     month_windows = [months[i:i + num_months_per_fold] for i in range(len(months) - num_months_per_fold + 1)]
 
-            print('prediction concluded')
+    #     print(month_windows)
 
-        # Save scores_df and y_pred to CSV
-        scores_df.to_csv('scores.csv', index=False)
-        pd.DataFrame(y_pred).to_csv('y_pred.csv', index=False)
+    #     col_target = [col for col in df.columns if self.target in col and "hist" not in col]
+    #     for window in month_windows:
 
-        return prediction_results
+    #         train = df.filter((pl.col('month') != window[2]) & (pl.col('month').is_in(window)))
+    #         # Save the last date of the train set
+    #         train_last_date = train[self.dateCol].max()
+
+    #         # Change: Filter the data that comes before 20:15:00 of the latest date.
+    #         # train = train.filter((pl.col(self.dateCol) < train_last_date.replace(hour=20, minute=15, second=0)))
+    #         print(f'last date of traning set: {train[self.dateCol].max()}')
+
+    #         X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
+
+    #         X_train_array = min_max_scale_polarsdf(X_train)
+    #         X_train_reshaped = X_train_array.reshape((X_train_array.shape[0], 1, X_train_array.shape[1])) # shape should be (143500, 1, 204)
+
+
+    #         try:
+    #             # The test set must start from the next month AND 28h later the last date of the training set to avoid overlapping
+    #             # test = df.filter((pl.col('month') == window[2]) & (pl.col('date') > train_last_date_shifted))
+    #             test = df.filter((pl.col('month') == window[2]))
+    #             print(f'first date of test set: {test[self.dateCol].min()}')
+    #             X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
+
+    #             X_test_array = min_max_scale_polarsdf(X_test)
+    #             X_test_reshaped = X_test_array.reshape((X_test_array.shape[0], 1, X_test_array.shape[1]))            
+
+    #             y_pred = train_and_predict(model, X_train_reshaped, y_train, X_test_reshaped)
+
+    #             prediction_results.append(y_pred)
+
+    #             # Compute metrics on the test set
+    #             rmse, rse, r2 = compute_metrics(y_test, y_pred)
+
+    #             print(rmse, rse, r2)
+
+    #             # Save metrics to scores_df
+    #             new_row = pd.DataFrame({'RMSE': [rmse],
+    #                                     'RSE': [rse],
+    #                                     'R2': [r2]})
+    #             scores_df = pd.concat([scores_df, new_row], ignore_index=True)
+    #         except Exception as e:
+    #             print(e)
+    #             break
+
+    #         print('prediction concluded')
+
+    #     # Save scores_df and y_pred to CSV
+    #     scores_df.to_csv('scores.csv', index=False)
+    #     pd.DataFrame(y_pred).to_csv('y_pred.csv', index=False)
+
+    #     return prediction_results
 
 
     # # instead of taking the first two months as training set and the third mont as test set
     # # take the first 30 days as training and the next week as test without overlapping by these two sets
-    # def MT_learning_prediction_cv2(self, df, method):
-    #     prediction_results = []
-    #     trained_models = {}
-
-    #     min_date = df[self.dateCol].min()
-    #     max_date = df[self.dateCol].max()
-
-    #     train_end_date = min_date + timedelta(days=30)
-    #     test_start_date = train_end_date + timedelta(hours=28, minutes=15)
-    #     test_end_date = test_start_date + timedelta(days=7)
-
-    #     while test_end_date <= max_date:
-    #         train = df.filter((pl.col(self.dateCol) >= min_date) & (pl.col(self.dateCol) < train_end_date))
-    #         test = df.filter((pl.col(self.dateCol) >= test_start_date) & (pl.col(self.dateCol) < test_end_date))
-
-    #         print(f'Training date range: {min_date} - {train_end_date}')
-    #         print(f'Testing date range: {test_start_date} - {test_end_date}')
-            
-    #         col_target = [col for col in df.columns if self.target in col and "hist" not in col]
-            
-    #         try:
-    #             X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
-    #             X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
-
-    #             method.fit(X_train, y_train)
-    #             y_pred = method.predict(X_test)
-
-    #             prediction_results.append((y_test, pl.DataFrame(y_pred), test[self.dateCol], test[self.key]))
-    #             trained_models[train_end_date] = method  # save the trained model for this fold
-    #         except Exception as e:
-    #             print(f"An error occurred: {e}")
-    #             pass
-
-    #         # Update the start and end dates for the next loop iteration
-    #         min_date = min_date + timedelta(days=7)
-    #         train_end_date = min_date + timedelta(days=30)
-    #         test_start_date = train_end_date + timedelta(hours=28, minutes=15)
-    #         test_end_date = test_start_date + timedelta(days=7)
-            
-    #     return prediction_results, trained_models
 
  
     # OLD CODE --------------------------------------------------------------------------------------------------------------------------

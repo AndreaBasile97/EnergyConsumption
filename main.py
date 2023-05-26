@@ -25,7 +25,6 @@ if __name__ == '__main__':
     print(pathCSV, config, target, histFeatures, key, dateCol, windowSize, numTargets)
 
     # select the methods
-    # methods = [RandomForestRegressor(n_jobs=-1, random_state=1)]
     methods = [XGBRegressor(objective='reg:squarederror', n_estimators=200, learning_rate=0.05),
                 MLPRegressor(hidden_layer_sizes=(128, 128, 128), activation='relu', solver='adam', 
                                 alpha=0.0001, batch_size='auto', learning_rate='constant', 
@@ -37,6 +36,7 @@ if __name__ == '__main__':
                RandomForestRegressor(n_jobs=-1, random_state=1),
                KNeighborsRegressor(n_neighbors=3, n_jobs=-1),
                LinearRegression(n_jobs=-1)]
+
 
     # set the configurator
     conf = Configurator(configuration=config, windows_size=windowSize, n_targets=numTargets,target=target,key=key,

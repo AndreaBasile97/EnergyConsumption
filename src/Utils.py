@@ -86,7 +86,7 @@ def model_evaluation_cv(results, configuration, model, n_targets, target, key):
         media = media.with_columns(window=pl.lit(str(window)))
         media = media.with_columns(pl.lit(configuration).alias('conf'), pl.lit(str(model)).alias('method'))
 
-        file = Path("output/" + type(model).__name__ + "_" + configuration.split("_")[0] + "_" + str(window) + ".csv")
+        file = Path("output/week" + type(model).__name__ + "_" + configuration.split("_")[0] + "_" + str(window) + ".csv")
         with open(file, mode="ab") as f:
             media.write_csv(f, has_header=False)
 
