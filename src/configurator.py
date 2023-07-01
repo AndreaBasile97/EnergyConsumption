@@ -81,7 +81,7 @@ class Configurator:
         df = df.with_columns([pl.col('date').dt.minute().alias('minutes')])
         # Since we got only 2019, this feature is useless
         df = df.drop('year')
-
+        df.to_pandas().to_csv('energy_consumption_transformed.csv', index=False)
         #Nel caso di granularità quart'oraria con 16 valori di target
         # filtro ogni 4 ore per ottenere il setting considerato
         # df = df.filter(pl.col(self.dateCol).dt.hour().is_in(list(np.arange(0, 23, 4))) & (pl.col(self.dateCol).dt.minute() == 0)).drop_nulls()
@@ -95,7 +95,7 @@ class Configurator:
             self.configuration = self.configuration + '_' + self.spatial_method
 
         print("configuration:", self.configuration)
-
+        
         return df, self.configuration
 
         
@@ -104,7 +104,7 @@ class Configurator:
             preds = self.MT_learning_prediction_week(df.sort(self.dateCol), method)
             return preds
         elif 'MULTI-STEP' in self.configuration:
-            preds = self.MT_learning_prediction_week(df.sort(self.dateCol), method, num_months_per_fold)
+            preds = self.MT_learning_prediction_cv(df.sort(self.dateCol), method, num_months_per_fold)
             return preds         
 
 
@@ -161,7 +161,7 @@ class Configurator:
     
     # Prediction using regressors
     def MT_learning_prediction_cv(self, df, method, num_months_per_fold = 3):
-        
+        print('monthly predictions')
         prediction_results = []
         trained_models = {}
 
@@ -182,13 +182,20 @@ class Configurator:
 
             # Change: Filter the data that comes before 20:15:00 of the latest date.
             train = train.filter((pl.col(self.dateCol) < train_last_date.replace(hour=20, minute=15, second=0)))
+            print(f'first date of traning set: {train[self.dateCol].min()}')
             print(f'last date of traning set: {train[self.dateCol].max()}')
 
             X_train, y_train = train.select(pl.col(list(set(train.columns).difference(col_target)))).drop([self.key, self.dateCol]),train.select(pl.col(list(col_target)))
 
             # The test set must start from the next month
             test = df.filter((pl.col('month') == window[2]))
-            print(f'first date of test set: {test[self.dateCol].min()}')
+
+            # Print the first and last date of the test set
+            test_first_date = test[self.dateCol].min()
+            test_last_date = test[self.dateCol].max()
+            print(f'first date of test set: {test_first_date}')
+            print(f'last date of test set: {test_last_date}')
+
             try:
                 X_test, y_test = test.select(pl.col(list(set(test.columns).difference(col_target)))).drop([self.key, self.dateCol]),test.select(pl.col(list(col_target)))
                 method.fit(X_train, y_train)

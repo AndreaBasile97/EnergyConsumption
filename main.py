@@ -25,7 +25,8 @@ if __name__ == '__main__':
     print(pathCSV, config, target, histFeatures, key, dateCol, windowSize, numTargets)
 
     # select the methods
-    methods = [XGBRegressor(objective='reg:squarederror', n_estimators=200, learning_rate=0.05),
+    #XGBRegressor(objective='reg:squarederror', n_estimators=200, learning_rate=0.05)
+    methods = [
                 MLPRegressor(hidden_layer_sizes=(128, 128, 128), activation='relu', solver='adam', 
                                 alpha=0.0001, batch_size='auto', learning_rate='constant', 
                                 learning_rate_init=0.001, power_t=0.5, max_iter=1000, shuffle=True, 
@@ -35,7 +36,8 @@ if __name__ == '__main__':
                                 n_iter_no_change=10),
                RandomForestRegressor(n_jobs=-1, random_state=1),
                KNeighborsRegressor(n_neighbors=3, n_jobs=-1),
-               LinearRegression(n_jobs=-1)]
+               LinearRegression(n_jobs=-1)
+            ]
 
 
     # set the configurator
@@ -54,7 +56,7 @@ if __name__ == '__main__':
 
     for method in methods:
         #2) predictions
-        preds, trained_models = conf.kfold_prediction(df, method, num_months_per_fold=3, week=True)
+        preds, trained_models = conf.kfold_prediction(df, method, num_months_per_fold=3, week=False)
         # 3) evaluatation
         score = model_evaluation_cv(preds, config, method, numTargets, target, key)
         #score = model_evaluation_cv(preds, config, 'LSTM', numTargets, target, key)
